@@ -6,6 +6,7 @@ from apiclient import discovery
 from oauth2client import client
 from oauth2client import tools
 from oauth2client.file import Storage
+from config import workdir
 
 try:
     import argparse
@@ -28,7 +29,8 @@ class auth:
         Returns:
             Credentials, the obtained credential.
         """
-        cwd_dir = os.getcwd()
+        #cwd_dir = os.getcwd()
+        cwd_dir = workdir
         credential_dir = os.path.join(cwd_dir, '.credentials')
         if not os.path.exists(credential_dir):
             os.makedirs(credential_dir)
