@@ -3,16 +3,14 @@
 
 from __future__ import print_function
 import httplib2
-import os, io, csv
+import os, io, csv, sys
 
 from apiclient import discovery
 from apiclient import http as ghttp
 from template import general_section,queue_section,member_section
 
-from config import SCOPES,CLIENT_SECRET_FILE,APPLICATION_NAME, exten_from, exten_to, file_id, csv_file, daytypes
-from asterisk.ami import AMIClient
-from asterisk.ami import SimpleAction
-
+from config import *
+from ami import reload_queues
 import auth
 
 authInst = auth.auth(SCOPES, CLIENT_SECRET_FILE, APPLICATION_NAME)
@@ -56,8 +54,35 @@ def parse_csv(csv_file,daytypes):
             mapping[daytype][trunkname] = []
         for item, val in row.iteritems():
             if is_exten(item) and val == '+':
-                mapping[daytype][trunkname].append(item)
+                if item not in mapping[daytype][trunkname]:
+                    mapping[daytype][trunkname].append(item)
     return mapping
+
+def assemble_file(path):
+    try:
+        queues_file = open(queues_path, 'w')
+        queues_file.write(general_section)
+        for day, queues in rules.iteritems():
+            for queue in queues:
+                queues_file.write(queue_section.format(queue.encode('utf-8'), day.encode('utf-8')))
+                for member in queues[queue]:
+                    queues_file.write(member_section.format(member.encode('utf-8')))
+        print('queues.conf file created')
+    except Exception as e:
+        sys.exit('Failed to create queues.conf: %s' % e)
+
+def fix_permissions(uid,gid,chmod):
+    try:
+        os.chown(queues_path, uid, gid)
+        print('queues.conf owner and group changed to %s:%s' % (uid, gid))
+    except Exception as e:
+        sys.exit('Failed to change owner and group for queues.conf: %s' % e)
+
+    try:
+        os.chmod(queues_path, chmod)
+        print('queues.conf permissions chanded to %02o' % (chmod,))
+    except Exception as e:
+        sys.exit('Failed to change permissions for queues.conf: %s' % e)
 
 # Obtaining csv file from Google Spreadsheet
 export_file(file_id, csv_file)
@@ -65,13 +90,16 @@ raw_csv = open(csv_file, 'rb')
 
 # Parse file and create daytype\queue\member mapping
 rules = parse_csv(raw_csv, daytypes)
-queues_file = open('queues.conf', 'w')
 
 # Assemble queues.conf file
-queues_file.write(general_section)
+assemble_file(queues_path)
 
-for day,queues in rules.iteritems():
-    for queue in queues:
-        queues_file.write(queue_section.format(queue.encode('utf-8'),day.encode('utf-8')))
-        for member in queues[queue]:
-            queues_file.write(member_section.format(member.encode('utf-8')))
+# Change file owner and rights
+fix_permissions(uid,gid,chmod)
+
+# Reloading queues from AMI
+reload_status = reload_queues()
+if reload_status is True:
+    print('Queues configuration reload successfully')
+else:
+    sys.exit('Failed to reload queues: %s' % reload_status)
