@@ -60,7 +60,7 @@ def parse_csv(csv_file,daytypes):
 
 def assemble_file(path):
     try:
-        queues_file = open(queues_path, 'w')
+        queues_file = open(tmp_queue_file, 'w')
         queues_file.write(general_section)
         for day, queues in rules.iteritems():
             for queue in queues:
@@ -71,15 +71,15 @@ def assemble_file(path):
     except Exception as e:
         sys.exit('Failed to create queues.conf: %s' % e)
 
-def fix_permissions(uid,gid,chmod):
+def fix_permissions(uid,gid,chmod,tmp_file):
     try:
-        os.chown(queues_path, uid, gid)
+        os.chown(tmp_file, uid, gid)
         print('queues.conf owner and group changed to %s:%s' % (uid, gid))
     except Exception as e:
         sys.exit('Failed to change owner and group for queues.conf: %s' % e)
 
     try:
-        os.chmod(queues_path, chmod)
+        os.chmod(tmp_file, chmod)
         print('queues.conf permissions chanded to %02o' % (chmod,))
     except Exception as e:
         sys.exit('Failed to change permissions for queues.conf: %s' % e)
@@ -92,10 +92,16 @@ raw_csv = open(csv_file, 'rb')
 rules = parse_csv(raw_csv, daytypes)
 
 # Assemble queues.conf file
-assemble_file(queues_path)
+assemble_file(tmp_queue_file)
 
 # Change file owner and rights
-fix_permissions(uid,gid,chmod)
+fix_permissions(uid,gid,chmod,tmp_queue_file)
+
+try:
+    os.rename(tmp_queue_file, queue_path)
+    print('Moved queues.conf to asterisk working dir')
+except Exception as e:
+    sys.exit('Failed to move queues.conf to asterisk working dir: %s' % e)
 
 # Reloading queues from AMI
 reload_status = reload_queues()
