@@ -58,7 +58,7 @@ def parse_csv(csv_file,daytypes):
                     mapping[daytype][trunkname].append(item)
     return mapping
 
-def assemble_file(path,rules):
+def assemble_file(path, rules):
     try:
         queues_file = open(path, 'w')
         queues_file.write(general_section)
@@ -103,7 +103,7 @@ rules = parse_csv(raw_csv, daytypes)
 backup_file(backup_queue_file,queue_path)
 
 # Assemble queues.conf file
-if assemble_file(queue_path) is True:
+if assemble_file(queue_path,rules) is True:
     # Reload queues if OK
     reload_status = reload_queues()
     if reload_status is True:
