@@ -3,7 +3,7 @@
 
 from __future__ import print_function
 import httplib2
-import os, io, csv, sys
+import io, csv, sys,shutil
 
 from apiclient import discovery
 from apiclient import http as ghttp
@@ -60,29 +60,34 @@ def parse_csv(csv_file,daytypes):
 
 def assemble_file(path):
     try:
-        queues_file = open(tmp_queue_file, 'w')
+        queues_file = open(path, 'w')
         queues_file.write(general_section)
         for day, queues in rules.iteritems():
             for queue in queues:
                 queues_file.write(queue_section.format(queue.encode('utf-8'), day.encode('utf-8')))
                 for member in queues[queue]:
                     queues_file.write(member_section.format(member.encode('utf-8')))
-        print('queues.conf file created')
+        print('queues.conf file altered')
+        return True
     except Exception as e:
-        sys.exit('Failed to create queues.conf: %s' % e)
+        print('Failed to alter queues.conf: %s' % e)
+        return False
 
-def fix_permissions(uid,gid,chmod,tmp_file):
+def backup_file(bck_path,path):
     try:
-        os.chown(tmp_file, uid, gid)
-        print('queues.conf owner and group changed to %s:%s' % (uid, gid))
+        shutil.copyfile(path,bck_path)
+        print('queues.conf backuped successfuly')
     except Exception as e:
-        sys.exit('Failed to change owner and group for queues.conf: %s' % e)
+        sys.exit('Failed to backup queues.conf: %s' % e)
 
+def rollover(bck_path,path):
     try:
-        os.chmod(tmp_file, chmod)
-        print('queues.conf permissions chanded to %02o' % (chmod,))
+        bck_file = open(bck_path,'r')
+        orig_file = open(path,'w')
+        orig_file.write(bck_file.read())
+        print('Original queues.conf restored')
     except Exception as e:
-        sys.exit('Failed to change permissions for queues.conf: %s' % e)
+        sys.exit('Failed to rollover queues.conf: %s' % e)
 
 # Obtaining csv file from Google Spreadsheet
 export_file(file_id, csv_file)
@@ -91,21 +96,19 @@ raw_csv = open(csv_file, 'rb')
 # Parse file and create daytype\queue\member mapping
 rules = parse_csv(raw_csv, daytypes)
 
+# Make a backup version of queues.conf
+backup_file(backup_queue_file,queue_path)
+
 # Assemble queues.conf file
-assemble_file(tmp_queue_file)
-
-# Change file owner and rights
-fix_permissions(uid,gid,chmod,tmp_queue_file)
-
-try:
-    os.rename(tmp_queue_file, queue_path)
-    print('Moved queues.conf to asterisk working dir')
-except Exception as e:
-    sys.exit('Failed to move queues.conf to asterisk working dir: %s' % e)
-
-# Reloading queues from AMI
-reload_status = reload_queues()
-if reload_status is True:
-    print('Queues configuration reload successfully')
+if assemble_file(queue_path) is True:
+    # Reload queues if OK
+    reload_status = reload_queues()
+    if reload_status is True:
+        print('Queues configuration reload successfully')
+    else:
+        sys.exit('Failed to reload queues: %s' % reload_status)
 else:
-    sys.exit('Failed to reload queues: %s' % reload_status)
+    rollover(backup_queue_file,queue_path)
+
+
+
