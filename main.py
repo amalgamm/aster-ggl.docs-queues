@@ -67,6 +67,7 @@ def assemble_file(path):
                 queues_file.write(queue_section.format(queue.encode('utf-8'), day.encode('utf-8')))
                 for member in queues[queue]:
                     queues_file.write(member_section.format(member.encode('utf-8')))
+        queues_file.close()
         print('queues.conf file altered')
         return True
     except Exception as e:
@@ -86,6 +87,8 @@ def rollover(bck_path,path):
         orig_file = open(path,'w')
         orig_file.write(bck_file.read())
         print('Original queues.conf restored')
+        bck_file.close()
+        orig_file.close()
     except Exception as e:
         sys.exit('Failed to rollover queues.conf: %s' % e)
 
